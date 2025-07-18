@@ -1,21 +1,20 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import axios from "axios";
+import "./App.css";
 
-const TABS = [
-  "Indian Law Assistant",
-  "Contract Explainer",
-  "Case Law Finder",
-  "Bail Eligibility Checker",
-];
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(TABS[0]);
+  const [activeTab, setActiveTab] = useState("Indian Law Assistant");
   const [input, setInput] = useState("");
   const [pdf, setPdf] = useState(null);
   const [response, setResponse] = useState("");
+  const [isListening, setIsListening] = useState(false);
 
   const handleSend = async () => {
-    setResponse("Loading...");
+    setResponse("⏳ Processing...");
     try {
       if (activeTab === "Contract Explainer") {
         const formData = new FormData();
@@ -23,126 +22,125 @@ export default function App() {
         const res = await axios.post("/api/explain-pdf", formData);
         setResponse(res.data.reply);
       } else {
-        const res = await axios.post("/api/chat", {
+        const res = await axios.post("http://localhost:5000/api/chat/", {
           query: input,
           type: activeTab,
         });
         setResponse(res.data.reply);
       }
     } catch (err) {
+      console.log(err);
       setResponse("❌ Something went wrong.");
     }
   };
 
+  const startListening = () => {
+    if (!recognition) {
+      alert("Speech Recognition not supported in this browser.");
+      return;
+    }
+    setIsListening(true);
+    recognition.lang = "en-IN";
+    recognition.start();
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setInput((prev) => `${prev} ${transcript}`);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+  };
+
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>⚖️ Indian Law Legal Tools</h1>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white px-4 py-10 font-sans">
+      <div className="max-w-7xl mx-auto">
+        <h2 className="text-4xl font-bold text-center text-blue-800 mb-10">
+          ⚖️ LawHelpNow - Indian Legal Assistant
+        </h2>
 
-      <div style={styles.tabRow}>
-        {TABS.map((tab) => (
+        <div className="flex flex-wrap justify-center gap-4 mb-8">
+          {[
+            "Indian Law Assistant",
+            "Contract Explainer",
+            "Case Law Finder",
+            "Bail Eligibility Checker",
+          ].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                setInput("");
+                setResponse("");
+                setPdf(null);
+              }}
+              className={`px-5 py-2 rounded-full text-sm font-semibold shadow transition-all duration-200 ${
+                tab === activeTab
+                  ? "bg-blue-700 text-white scale-105"
+                  : "bg-white text-blue-700 border border-blue-300 hover:bg-blue-100"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="bg-white shadow-lg rounded-xl p-8 border border-gray-100 transition">
+          {activeTab === "Contract Explainer" ? (
+            <div className="mb-6">
+              <label className="block mb-2 text-sm font-medium text-gray-700">
+                Upload PDF
+              </label>
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={(e) => setPdf(e.target.files[0])}
+                className="block w-full text-sm text-gray-700 border border-gray-300 rounded-lg cursor-pointer focus:outline-none file:py-2 file:px-4 file:bg-blue-700 file:text-white file:border-0 hover:file:bg-blue-800"
+              />
+            </div>
+          ) : (
+            <div className="mb-6 relative">
+              <label className="block mb-2 text-sm font-medium text-gray-700">
+                Your Legal Query
+              </label>
+              <textarea
+                rows="6"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="E.g. What is the punishment for theft under IPC?"
+                className="w-full p-4 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={startListening}
+                type="button"
+                className="absolute top-10 right-4 text-blue-600 hover:text-blue-800"
+                title="Speak"
+              >
+                🎤
+              </button>
+            </div>
+          )}
+
           <button
-            key={tab}
-            onClick={() => {
-              setActiveTab(tab);
-              setInput("");
-              setResponse("");
-              setPdf(null);
-            }}
-            style={{
-              ...styles.tabButton,
-              backgroundColor: tab === activeTab ? "#0a74da" : "#eee",
-              color: tab === activeTab ? "#fff" : "#000",
-            }}
+            onClick={handleSend}
+            className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2 rounded-md font-medium shadow-md transition duration-200"
           >
-            {tab}
+            Submit
           </button>
-        ))}
-      </div>
 
-      <div style={styles.box}>
-        {activeTab === "Contract Explainer" ? (
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={(e) => setPdf(e.target.files[0])}
-          />
-        ) : (
-          <textarea
-            rows="6"
-            placeholder="Type your legal query..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            style={styles.textarea}
-          />
-        )}
-
-        <button onClick={handleSend} style={styles.button}>
-          Submit
-        </button>
-
-        {response && (
-          <div style={styles.responseBox}>
-            <h3>🧾 Result:</h3>
-            <pre style={{ whiteSpace: "pre-wrap" }}>{response}</pre>
-          </div>
-        )}
+          {response && (
+            <div className="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                🧾 Result
+              </h3>
+              <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono">
+                {response}
+              </pre>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    padding: "20px",
-    fontFamily: "sans-serif",
-    maxWidth: "800px",
-    margin: "auto",
-  },
-  title: {
-    textAlign: "center",
-    marginBottom: "20px",
-  },
-  tabRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "20px",
-    flexWrap: "wrap",
-    gap: "10px",
-  },
-  tabButton: {
-    flex: "1",
-    padding: "10px",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
-  box: {
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    backgroundColor: "#fafafa",
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px",
-    fontSize: "16px",
-    borderRadius: "4px",
-    border: "1px solid #ccc",
-    marginBottom: "10px",
-  },
-  button: {
-    padding: "10px 20px",
-    backgroundColor: "#0a74da",
-    color: "#fff",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    marginBottom: "10px",
-  },
-  responseBox: {
-    backgroundColor: "#f2f2f2",
-    padding: "15px",
-    borderRadius: "8px",
-    whiteSpace: "pre-wrap",
-  },
-};
